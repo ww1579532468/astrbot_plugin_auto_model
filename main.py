@@ -1,30 +1,74 @@
 import asyncio
-import re
-import random
 import json
-from urllib.parse import urlsplit
+import random
+import re
 from types import SimpleNamespace
+from urllib.parse import urlsplit
 
 import aiohttp
 from aiohttp import web
+
 from astrbot.api import AstrBotConfig
 from astrbot.api.event import filter
 from astrbot.api.star import Context, Star
 
 # 本机接口和资源限制。
 MODEL_NAME = "auto"  # 自动注册的供应商标识和默认模型别名。
-LOCAL_BASE = "http://127.0.0.1/v1"  # 注册给 AstrBot 的本机接口地址；监听地址和端口在 initialize 中设置。
-DEFAULT_CONTEXT = 100000  # 默认上下文长度参考值；当前各处默认值仍单独写为 100000，修改时需同步。
-MAX_RESPONSE_BYTES = 32 * 1024 * 1024  # 单次非流式上游响应的大小上限，单位字节，当前为 32 MiB。
+DEFAULT_PORT = 56751
+# Local provider URL is derived from the configured listening port.
+DEFAULT_CONTEXT = (
+    100000  # 默认上下文长度参考值；当前各处默认值仍单独写为 100000，修改时需同步。
+)
+MAX_RESPONSE_BYTES = (
+    32 * 1024 * 1024
+)  # 单次非流式上游响应的大小上限，单位字节，当前为 32 MiB。
 MAX_MODELS_BYTES = 4 * 1024 * 1024  # 上游模型列表的大小上限，单位字节，当前为 4 MiB。
 MODELS_TIMEOUT = 15  # 获取上游模型列表的总超时秒数；不用于会话请求。
 
 # 自动兜底选择规则；配置中明确指定的优先模型不受这些筛选限制。
-AUTO_PREFERENCE = ("flash", "low")  # 自动选择顺序：先找 flash，再找 low，都没有则选最后一个合格模型。
-ALLOWED_EFFORT = {"low", "minimal", "none", "off"}  # 思考模型名称包含这些强度标记时，允许参与自动选择。
-BLOCKED_EFFORT = {"high", "xhigh", "ultra", "max", "heavy", "extended"}  # 高消耗强度黑名单，命中任意一项即排除。
-IMAGE_MARKERS = ("image", "imagen", "dall-e", "dalle", "stable-diffusion", "flux", "midjourney", "ideogram", "recraft")  # 绘图模型名称黑名单，命中任意一项即排除。
-NON_CHAT_MARKERS = {"embedding", "embeddings", "rerank", "reranker", "whisper", "tts", "moderation", "sora", "veo", "video", "transcribe", "transcription"}  # 非对话模型关键词黑名单，命中任意一项即排除。
+AUTO_PREFERENCE = (
+    "flash",
+    "low",
+)  # 自动选择顺序：先找 flash，再找 low，都没有则选最后一个合格模型。
+ALLOWED_EFFORT = {
+    "low",
+    "minimal",
+    "none",
+    "off",
+}  # 思考模型名称包含这些强度标记时，允许参与自动选择。
+BLOCKED_EFFORT = {
+    "high",
+    "xhigh",
+    "ultra",
+    "max",
+    "heavy",
+    "extended",
+}  # 高消耗强度黑名单，命中任意一项即排除。
+IMAGE_MARKERS = (
+    "image",
+    "imagen",
+    "dall-e",
+    "dalle",
+    "stable-diffusion",
+    "flux",
+    "midjourney",
+    "ideogram",
+    "recraft",
+)  # 绘图模型名称黑名单，命中任意一项即排除。
+NON_CHAT_MARKERS = {
+    "embedding",
+    "embeddings",
+    "rerank",
+    "reranker",
+    "whisper",
+    "tts",
+    "moderation",
+    "sora",
+    "veo",
+    "video",
+    "transcribe",
+    "transcription",
+}  # 非对话模型关键词黑名单，命中任意一项即排除。
 
 
 # 将配置错误与其他异常区分，便于返回接口错误信息。
@@ -84,6 +128,14 @@ class AutoModelPlugin(Star):
         # key：访问上游所需的密钥，本机接口不校验密钥。
         # 优先级：每行填写 模型名称|上下文长度，按从上到下的顺序精确匹配。
         self.config = config
+        self.port = config.get("listen_port", DEFAULT_PORT)
+        if (
+            isinstance(self.port, bool)
+            or not isinstance(self.port, int)
+            or not 1 <= self.port <= 65535
+        ):
+            raise ConfigError("listen_port must be an integer between 1 and 65535")
+        self.local_base = f"http://127.0.0.1:{self.port}/v1"
         self.lock = asyncio.Lock()
         self.runner = None
         self.client = None
@@ -124,7 +176,9 @@ class AutoModelPlugin(Star):
                 name, size = line.strip(), "100000"
             name = name.strip()
             if not name:
-                raise ConfigError(f"Priority line {number}: model name must not be empty")
+                raise ConfigError(
+                    f"Priority line {number}: model name must not be empty"
+                )
             try:
                 tokens = int(size)
                 if tokens <= 0:
@@ -156,7 +210,7 @@ class AutoModelPlugin(Star):
         if (
             url.hostname in ("localhost", "0.0.0.0", "::", "::1")
             or url.hostname.startswith("127.")
-        ) and (port or (80 if url.scheme == "http" else 443)) == 80:
+        ) and (port or (80 if url.scheme == "http" else 443)) == self.port:
             raise ConfigError("Upstream cannot be this local service")
         return base
 
@@ -252,9 +306,7 @@ class AutoModelPlugin(Star):
                 if candidate:
                     lines = "\n".join(self.priority_lines())
                     updates["优先级"] = (
-                        lines.rstrip()
-                        + ("\n" if lines.strip() else "")
-                        + candidate
+                        lines.rstrip() + ("\n" if lines.strip() else "") + candidate
                     )
             if candidate:
                 if candidate != current:
@@ -468,7 +520,7 @@ class AutoModelPlugin(Star):
             app.router.add_post("/v1/responses", self.responses)
             self.runner = web.AppRunner(app, access_log=None)
             await self.runner.setup()
-            await web.TCPSite(self.runner, "127.0.0.1", 80).start()
+            await web.TCPSite(self.runner, "127.0.0.1", self.port).start()
             if getattr(
                 getattr(self.context, "provider_manager", None), "provider_insts", None
             ):
@@ -506,9 +558,7 @@ class AutoModelPlugin(Star):
             chosen_name = (
                 existing_model["model"]
                 if existing_model
-                else (
-                    "otto" if random.random() < 0.01 else MODEL_NAME
-                )
+                else ("otto" if random.random() < 0.01 else MODEL_NAME)
             )
             model_id = (
                 existing_model["id"] if existing_model else f"{source_id}/{chosen_name}"
@@ -531,7 +581,7 @@ class AutoModelPlugin(Star):
                         "type": "openai_responses",
                         "provider": "openai",
                         "provider_type": "chat_completion",
-                        "api_base": LOCAL_BASE,
+                        "api_base": self.local_base,
                         "key": ["auto"],
                         "enable": True,
                         "timeout": 120,
@@ -539,17 +589,28 @@ class AutoModelPlugin(Star):
                         "custom_headers": {},
                     },
                 )
-            elif source.get("type") != "openai_responses" or normalized_url(
-                source.get("api_base") or ""
-            ) != normalized_url(LOCAL_BASE):
-                raise RuntimeError(
-                    "Provider source auto already exists with different settings"
+            else:
+                previous_url = urlsplit(source.get("api_base") or "")
+                # Migrate only the plugin's own loopback provider when its port changes.
+                owned_local_source = (
+                    previous_url.scheme == "http"
+                    and previous_url.hostname == "127.0.0.1"
+                    and previous_url.path.rstrip("/") == "/v1"
+                    and not previous_url.username
+                    and not previous_url.password
+                    and not previous_url.query
+                    and not previous_url.fragment
                 )
-            elif "proxy" not in source or "custom_headers" not in source:
+                if source.get("type") != "openai_responses" or not owned_local_source:
+                    raise RuntimeError(
+                        "Provider source auto already exists with different settings"
+                    )
                 updated_source = dict(source)
+                updated_source["api_base"] = self.local_base
                 updated_source.setdefault("proxy", "")
                 updated_source.setdefault("custom_headers", {})
-                await service.upsert_provider_source(source_id, updated_source)
+                if updated_source != source:
+                    await service.upsert_provider_source(source_id, updated_source)
             # 已有模型只补齐缺失项，并整理启用、能力、参数、上下文的显示顺序。
             if existing_model is not None:
                 updated_model = dict(existing_model)

@@ -22,5 +22,11 @@
     "description": "优先级",
     "hint": "每行 模型名称|上下文长度；省略默认100000。全部未匹配时按代码规则自动补选并追加。",
     "default": "glm-5.3-flash\ngemini-3.8-flash\ndeepseek-chat\nqwen-turbo\ngpt-4.1-mini\nclaude-haiku-4-5"
+  },
+  "listen_port": {
+    "type": "int",
+    "description": "本地监听端口",
+    "hint": "默认56751，范围1～65535；修改后重载插件或重启 AstrBot生效。",
+    "default": 56751
   }
 }
