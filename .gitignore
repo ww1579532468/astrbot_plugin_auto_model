@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+*.bak*
+.env
+.env.*
+.venv/
+config.json
+data/
+logs/

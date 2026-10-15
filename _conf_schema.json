@@ -1,0 +1,26 @@
+{
+  "当前模型": {
+    "type": "string",
+    "description": "当前模型",
+    "hint": "直接使用此模型；切换时插件自动更新，重启后保留。留空则首次调用时选择。",
+    "default": ""
+  },
+  "API": {
+    "type": "string",
+    "description": "API",
+    "hint": "OpenAI 兼容地址，例如 https://example.com/v1",
+    "default": ""
+  },
+  "key": {
+    "type": "string",
+    "description": "key",
+    "default": "",
+    "secret": true
+  },
+  "优先级": {
+    "type": "text",
+    "description": "优先级",
+    "hint": "每行 模型名称|上下文长度；省略默认100000。全部未匹配时按代码规则自动补选并追加。",
+    "default": "glm-5.3-flash\ngemini-3.8-flash\ndeepseek-chat\nqwen-turbo\ngpt-4.1-mini\nclaude-haiku-4-5"
+  }
+}
