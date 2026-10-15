@@ -255,7 +255,6 @@ class AutoModelPlugin(Star):
                         lines.rstrip()
                         + ("\n" if lines.strip() else "")
                         + candidate
-                        + "|100000"
                     )
             if candidate:
                 if candidate != current:
