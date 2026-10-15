@@ -1,6 +1,6 @@
 name: astrbot_plugin_auto_model
-display_name: Auto 本机 Responses 路由
-desc: 提供固定的本机 Responses 接口，在上游模型不可用时自动重新选择并切换，减少手动修改模型配置。
+display_name: auto模型
+desc: 添加根据分组自动切换路由的auto模型，也就是节省几十秒。
 version: 1.0.0
 author: ww
 astrbot_version: '>=4.28.2,<5'
