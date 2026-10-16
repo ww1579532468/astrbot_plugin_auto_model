@@ -1,7 +1,7 @@
 name: astrbot_plugin_auto_model
 display_name: auto模型
 desc: 添加根据分组自动切换路由的auto模型，也就是节省几十秒。
-version: 1.0.0
+version: 1.1.0
 author: ww
 astrbot_version: '>=4.28.2,<5'
 repo: https://github.com/ww1579532468/astrbot_plugin_auto_model

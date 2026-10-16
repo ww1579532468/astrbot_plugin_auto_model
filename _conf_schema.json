@@ -28,5 +28,18 @@
     "description": "本地监听端口",
     "hint": "默认56751，范围1～65535；修改后重载插件或重启 AstrBot生效。",
     "default": 56751
+  },
+  "允许外部访问": {
+    "type": "bool",
+    "description": "允许外部访问",
+    "hint": "默认仅本机可用；开启后监听全部网卡，外部请求必须携带访问密钥。修改后重载插件生效。",
+    "default": false
+  },
+  "访问密钥": {
+    "type": "string",
+    "description": "访问密钥",
+    "hint": "与上游 key 独立。开启外部访问且留空时自动生成并保存；本机直连免密。修改后重载插件生效。",
+    "default": "",
+    "secret": true
   }
 }
